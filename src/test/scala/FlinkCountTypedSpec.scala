@@ -14,7 +14,7 @@ class JobManager private (context: ActorContext[JobManager.JobManagerCommand]) {
         online(taskManager, state)
     }
 
-  def online(taskActorRef: ActorRef[TaskCommand], totalWordCount: Int): Behavior[JobManagerCommand] =
+  def online(taskActorRef: ActorRef[TaskManagerCommand], totalWordCount: Int): Behavior[JobManagerCommand] =
     Behaviors.receiveMessage {
       case Work(text) =>
         taskActorRef ! TaskWork(text)
@@ -28,19 +28,16 @@ class JobManager private (context: ActorContext[JobManager.JobManagerCommand]) {
 
 object JobManager {
   sealed trait JobManagerCommand
-  case class Register(who: ActorRef[Reply], taskManager: ActorRef[TaskCommand]) extends JobManagerCommand
-  case class Work(text: String)                                                 extends JobManagerCommand
-  case class WorkCompleted(count: Int, originalRequester: ActorRef[Reply])      extends JobManagerCommand
-  case class CommandB(who: ActorRef[Reply])                                     extends JobManagerCommand
+  case class Register(who: ActorRef[ClientReply], taskManager: ActorRef[TaskManagerCommand]) extends JobManagerCommand
+  case class Work(text: String)                                                              extends JobManagerCommand
+  case class WorkCompleted(count: Int, originalRequester: ActorRef[ClientReply])             extends JobManagerCommand
 
-  sealed trait TaskCommand
-  case class TaskWork(text: String) extends TaskCommand
+  sealed trait TaskManagerCommand
+  case class TaskWork(text: String) extends TaskManagerCommand
 
-  sealed trait Reply
-  object RegistrationAck             extends Reply
-  case class Report(totalCount: Int) extends Reply
-  case class ReplyA(v: String)       extends Reply
-  object ReplyB                      extends Reply
+  sealed trait ClientReply
+  object RegistrationAck             extends ClientReply
+  case class Report(totalCount: Int) extends ClientReply
 
   def someLogic(totalWordCount: Int, count: Int): Int = totalWordCount + count
 
@@ -51,15 +48,12 @@ object JobManager {
 }
 
 class FlinkCountTypedSpec extends AnyWordSpec with Matchers {
-
   import JobManager._
-
-
 
   "A method manager actor" should {
     "return correct int value" in {
       val totalWordCount = 5
-      val count = 1
+      val count          = 1
       val expectedResult = 6
 
       val actualResult = JobManager.someLogic(totalWordCount, count)
@@ -70,13 +64,12 @@ class FlinkCountTypedSpec extends AnyWordSpec with Matchers {
 
 
   "A Job manager actor" should {
-
     "register Task manager actor" in {
       val kit = ActorTestKit()
-
       val jobManagerActor  = kit.spawn(JobManager())
-      val taskManagerProbe = kit.createTestProbe[TaskCommand]()
-      val clientProbe      = kit.createTestProbe[Reply]()
+
+      val taskManagerProbe = kit.createTestProbe[TaskManagerCommand]()
+      val clientProbe      = kit.createTestProbe[ClientReply]()
 
       jobManagerActor ! Register(clientProbe.ref, taskManagerProbe.ref)
 
@@ -85,10 +78,9 @@ class FlinkCountTypedSpec extends AnyWordSpec with Matchers {
 
     "send the work to the Task Manager actor" in {
       val kit = ActorTestKit()
-
       val jobManagerActor  = kit.spawn(JobManager())
-      val taskManagerProbe = kit.createTestProbe[TaskCommand]()
-      val clientProbe      = kit.createTestProbe[Reply]()
+      val taskManagerProbe = kit.createTestProbe[TaskManagerCommand]()
+      val clientProbe      = kit.createTestProbe[ClientReply]()
 
       jobManagerActor ! Register(clientProbe.ref, taskManagerProbe.ref)
 
@@ -98,7 +90,8 @@ class FlinkCountTypedSpec extends AnyWordSpec with Matchers {
       jobManagerActor ! Work(wordCountText)
 
       taskManagerProbe.expectMessage(TaskWork(wordCountText))
-    }
 
+      taskManagerProbe.expectMessage()
+    }
   }
 }

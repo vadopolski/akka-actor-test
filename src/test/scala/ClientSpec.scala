@@ -36,8 +36,6 @@ object Client {
 
 class ClientSpec extends AnyWordSpec with Matchers {
 
-  import SyncTestingExampleSpec._
-
   "Typed probe actor" must {
 
     "send back the message - Job submitted with Synchronous testing" in {
@@ -46,7 +44,9 @@ class ClientSpec extends AnyWordSpec with Matchers {
 
       testKit.run(Client.JobSubmit(inbox.ref))
 
-      inbox.expectMessage("Job submitted")
+      val expectedResult = "Job submitted"
+
+      inbox.expectMessage(expectedResult)
     }
 
     "send back the message - Job submitted with Asynchronous testing" in {
@@ -71,7 +71,7 @@ class ClientSpec extends AnyWordSpec with Matchers {
 
 //      probe.expectMessage("Job submitted")
 
-      probe.expectMessageType[String]
+//      probe.expectMessageType[String]
       probe.receiveMessages(1)
     }
 
