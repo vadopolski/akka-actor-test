@@ -50,6 +50,7 @@ object JobManager {
 class FlinkCountTypedSpec extends AnyWordSpec with Matchers {
   import JobManager._
 
+
   "A method manager actor" should {
     "return correct int value" in {
       val totalWordCount = 5
@@ -91,7 +92,7 @@ class FlinkCountTypedSpec extends AnyWordSpec with Matchers {
 
       taskManagerProbe.expectMessage(TaskWork(wordCountText))
 
-      taskManagerProbe.expectMessage()
+//      taskManagerProbe.expectMessage()
     }
   }
 }

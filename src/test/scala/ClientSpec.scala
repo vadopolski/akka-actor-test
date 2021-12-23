@@ -1,4 +1,3 @@
-import Client.Command
 import akka.actor.testkit.typed.CapturedLogEvent
 import akka.actor.testkit.typed.Effect._
 import akka.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit, TestInbox}
@@ -10,24 +9,62 @@ import org.scalatest.wordspec.AnyWordSpec
 
 import scala.util.Random
 
+
+sealed trait Command
+case class JobSubmit(who: ActorRef[String]) extends Command
+case class CheckStatus(who: ActorRef[String]) extends Command
+case class StopClusterWork(who: ActorRef[String]) extends Command
+
+
+
+object Child {
+  def apply(): Behavior[Command] = waiting(0)
+
+  def waiting(msgCount: Int): Behavior[Command] = Behaviors.setup { ctx =>
+    Behaviors.receiveMessage {
+      case JobSubmit(who) =>
+        ctx.log.info("Child recieved")
+        who ! "Job submitted"
+        inProgress(msgCount + 1)
+    }
+  }
+
+  def inProgress(msgCount: Int): Behavior[Command] = Behaviors.setup { ctx =>
+    Behaviors.receiveMessage {
+      case CheckStatus(who) =>
+        who ! "Job in progress"
+        Behaviors.same
+      case StopClusterWork(who) =>
+        who ! "All Jobs correctly finished"
+        who ! "Cluster was shutdown"
+        waiting(msgCount + 1)
+    }
+    }
+
+}
+
+
+
 object Client {
   val random = new Random()
 
-  sealed trait Command
-  case class JobSubmit(who: ActorRef[String]) extends Command
-  case class CheckStatus(who: ActorRef[String]) extends Command
-  case class StopClusterWork(who: ActorRef[String]) extends Command
 
-  def apply(): Behaviors.Receive[Command] = Behaviors.receiveMessage {
-    case JobSubmit(who) => who ! "Job submitted"
-      Behaviors.same
-    case CheckStatus(who) =>
-      if (random.nextBoolean()) who ! "Job in progress" else who ! "Job failed"
-      Behaviors.same
-    case StopClusterWork(who) =>
-      who ! "All Jobs correctly finished"
-      who ! "Cluster was shutdown"
-      Behaviors.same
+  def apply(): Behavior[Command] = Behaviors.setup { ctx =>
+    val child = ctx.spawn(Child(), "child")
+
+    Behaviors.receiveMessage {
+      case msg @ JobSubmit(who) =>
+        ctx.log.info("Parent recieved")
+        child ! msg
+        Behaviors.same
+      case CheckStatus(who) =>
+        if (random.nextBoolean()) who ! "Job in progress" else who ! "Job failed"
+        Behaviors.same
+      case StopClusterWork(who) =>
+        who ! "All Jobs correctly finished"
+        who ! "Cluster was shutdown"
+        Behaviors.same
+    }
   }
   //#under-test
 
@@ -42,30 +79,26 @@ class ClientSpec extends AnyWordSpec with Matchers {
       val testKit = BehaviorTestKit(Client())
       val inbox = TestInbox[String]()
 
-      testKit.run(Client.JobSubmit(inbox.ref))
+      testKit.run(JobSubmit(inbox.ref))
 
       val expectedResult = "Job submitted"
 
-      inbox.expectMessage(expectedResult)
+//      inbox.expectMessage(expectedResult)
     }
 
     "send back the message - Job submitted with Asynchronous testing" in {
       val kit = ActorTestKit()
+      val client: ActorRef[Command] = kit.spawn(Client())
 
-      val client = kit.spawn(Client())
       val probe = kit.createTestProbe[String]()
 
-      client ! Client.JobSubmit(probe.ref)
+      client ! JobSubmit(probe.ref)
 
       probe.expectMessage("Job submitted")
 
-      client ! Client.StopClusterWork(probe.ref)
+      client ! CheckStatus(probe.ref)
 
       probe.expectMessageType[String]
-
-
-
-
     }
 
 
@@ -75,7 +108,7 @@ class ClientSpec extends AnyWordSpec with Matchers {
       val client = kit.spawn(Client())
       val probe = kit.createTestProbe[String]()
 
-      client ! Client.JobSubmit(probe.ref)
+      client ! JobSubmit(probe.ref)
 
 //      probe.expectMessage("Job submitted")
 
@@ -87,3 +120,4 @@ class ClientSpec extends AnyWordSpec with Matchers {
 
 
 }
+
