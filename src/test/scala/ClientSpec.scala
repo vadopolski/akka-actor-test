@@ -58,6 +58,14 @@ class ClientSpec extends AnyWordSpec with Matchers {
       client ! Client.JobSubmit(probe.ref)
 
       probe.expectMessage("Job submitted")
+
+      client ! Client.StopClusterWork(probe.ref)
+
+      probe.expectMessageType[String]
+
+
+
+
     }
 
 
